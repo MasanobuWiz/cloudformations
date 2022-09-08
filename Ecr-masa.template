@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description：MASA for ecs
+
+Resource:
+
+#ECR
+ECR:
+   Type: AWS::ECR::Repository
+   Properties:
+     RepositoryName: ecs-masa
+     Tags:
+       - Key: Name
+         Value: ECS-masa
+         
+# リポジトリ名をエクスポート
+Outputs:
+  ECRRepoName:
+     Value: !Ref ECR
+     Export:
+       Name: ExportECRRepoName
+         
+         
