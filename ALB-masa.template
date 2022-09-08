@@ -1,0 +1,148 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Mappings:
+  DeployEnvironmentMap:
+    Production:
+      "Protocol": "HTTPS"
+      "Port": 443
+    Staging:
+      "Protocol": "HTTP"
+      "Port": 80
+    Dev:
+      "Protocol": "HTTP"
+      "Port": 80
+
+Parameters:
+
+  // omit
+
+  EnvType:
+    Description: Which environments to deploy your service.
+    Type: String
+    AllowedValues: ["Dev", "Staging", "Production"]
+    Default: Dev
+
+  FrontendHealthCheckPath:
+    Description: Frontend WebApp health check path
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: ^[-¥.¥/a-zA-Z0-9]*$
+    Default: /frontend/portal
+
+  BackendDefaultHealthCheckPath:
+    Description: Backend Service Default health check path
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: ^[-¥.¥/a-zA-Z0-9]*$
+    Default: /backend/api/v1/healthcheck
+
+Resources:
+  FrontendALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: FrontendALB
+      Subnets:
+        - Fn::ImportValue: !Sub ${NTTdocomo}-PublicSubnet1
+        - Fn::ImportValue: !Sub ${NTTdocomo}-PublicSubnet2
+      SecurityGroups:
+        - Fn::ImportValue: !Sub ${NTTdocomo}-SecurityGroupFrontendALB
+
+  FrontendALBDefaultTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: FrontendALBTargetGroup
+      VpcId:
+        Fn::ImportValue: !Sub ${NTTdocomo}-VPCID
+      Port: !FindInMap [DeployEnvironmentMap, !Ref EnvType, Port]
+      Protocol: !FindInMap [DeployEnvironmentMap, !Ref EnvType, Protocol]
+      HealthCheckPath: !Ref FrontendHealthCheckPath
+      HealthyThresholdCount: 2
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '20'
+
+  FrontendALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref FrontendALB
+      Port: !FindInMap [DeployEnvironmentMap, !Ref EnvType, Port]
+      Protocol: !FindInMap [DeployEnvironmentMap, !Ref EnvType, Protocol]
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FrontendALBDefaultTargetGroup
+
+  BackendALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: BackendALB
+      Scheme: internal
+      Subnets:
+        - Fn::ImportValue: !Sub ${NTTDocomo}-PrivateSubnet1
+        - Fn::ImportValue: !Sub ${NTTDocomo}-PrivateSubnet2
+      SecurityGroups:
+        - Fn::ImportValue: !Sub ${NTTDocomo}-SecurityGroupBackendALB
+
+  BackendALBDefaultTargetGroup:                                          #(J)
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: BackendALBDefaultTargetGroup
+      VpcId:
+        Fn::ImportValue: !Sub ${NTTDocomo}-VPCID
+      Port: !FindInMap [DeployEnvironmentMap, !Ref EnvType, Port]
+      Protocol: !FindInMap [DeployEnvironmentMap, !Ref EnvType, Protocol]
+      HealthCheckPath: !Ref BackendDefaultHealthCheckPath
+      HealthyThresholdCount: 2
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '20'
+
+  BackendALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref BackendALB
+      Port: !FindInMap [DeployEnvironmentMap, !Ref EnvType, Port]
+      Protocol: !FindInMap [DeployEnvironmentMap, !Ref EnvType, Protocol]
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendALBDefaultTargetGroup
+
+Outputs:
+  FrontendALB:
+    Description: Frontend ALB
+    Value: !Ref FrontendALB
+    Export:
+      Name: !Sub ${NTTDocomo}-Frontend-ALB-${EnvType}
+
+  BackendALB:
+    Description: Backend ALB
+    Value: !Ref BackendALB
+    Export:
+      Name: !Sub ${NTTDocomo}-Backend-ALB-${EnvType}
+
+  FrontendALBDNS:
+    Description: Public DNS Name
+    Value: !GetAtt FrontendALB.DNSName
+    Export:
+      Name: !Sub ${NTTDocomo}-FrontendALBDNS-${EnvType}
+
+  BackendALBDNS:
+    Description: Private DNS Name
+    Value: !GetAtt BackendALB.DNSName
+    Export:
+      Name: !Sub ${NTTDocomo}-BackendALBDNS-${EnvType}
+
+  FrontendALBDefaultTargetGroup:
+    Description: Frontend TagetGroup Default
+    Value: !Ref FrontendALBDefaultTargetGroup
+    Export:
+      Name: !Sub ${NTTDocomo}-Frontend-ALB-DefaultTargetGroup-${EnvType}
+
+  BackendALBDefaultTargetGroup:
+    Description: Backend TagetGroup Default
+    Value: !Ref BackendALBDefaultTargetGroup
+    Export:
+      Name: !Sub ${NTTDocomo}-Backend-ALB-DefaultTargetGroup-${EnvType}
+
+  // omit
