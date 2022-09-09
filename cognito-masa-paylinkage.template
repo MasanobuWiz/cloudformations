@@ -43,8 +43,8 @@ Resources:
       ServiceToken: !GetAtt CognitoAdminCreateUserFunction.Arn
       UserPoolId:
         Ref: UserPool
-      UserName: TestUser
-      Password: Hoge_001
+      UserName: MASA
+      Password: test
   CognitoAdminCreateUserFunction:
     Type: 'AWS::Lambda::Function'
     Properties:
