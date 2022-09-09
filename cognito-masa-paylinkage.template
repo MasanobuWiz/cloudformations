@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Example template including Cognito Identity Pool and User Pool.
+Parameters:
+  SystemId:
+    Type: String
+    Description: 'Your System Id. For example:CpiDev3'
+    ConstraintDescription: System Id is required
+    Default: ''
+Resources:
+  UserPool:
+    Type: 'AWS::Cognito::UserPool'
+    Properties:
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      UserPoolName: !Join 
+        - ''
+        - - cup-
+          - !Ref SystemId
+          - '-TestUserPool'
+      MfaConfiguration: 'OFF'
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+        UnusedAccountValidityDays: 7
+  UserPoolClient:
+    Type: 'AWS::Cognito::UserPoolClient'
+    Properties:
+      UserPoolId:
+        Ref: UserPool
+      ClientName: !Join 
+        - ''
+        - - cupc-
+          - !Ref SystemId
+          - '-TestUserForCognito'
+      RefreshTokenValidity: 30
+  AdminCreateUser:
+    Type: 'Custom::CustomResource'
+    Properties:
+      ServiceToken: !GetAtt CognitoAdminCreateUserFunction.Arn
+      UserPoolId:
+        Ref: UserPool
+      UserName: TestUser
+      Password: Hoge_001
+  CognitoAdminCreateUserFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: !Join 
+        - ''
+        - - lmd-
+          - !Ref SystemId
+          - '-CognitoUserForTestUser'
+      Handler: index.handler
+      Role: !GetAtt CognitoFunctionExecutionRole.Arn
+      Code:
+        ZipFile: !Sub |
+          import cfnresponse
+          import boto3
+          def handler(event, context):
+            print(event['RequestType'])
+            # スタック削除時にも実行されるので、処理せずに終了させる
+            if event['RequestType'] == 'Delete':
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              return
+
+            # UserPoolIDを取得する
+            user_pool_id = event['ResourceProperties']['UserPoolId']
+            print(f'user_pool_id: {user_pool_id}')
+
+            # ユーザー名、パスワードを取得する
+            username = event['ResourceProperties']['UserName']
+            password = event['ResourceProperties']['Password']
+
+            # 検証用のユーザーを作成する
+            response_data = {}
+            try:
+              client = boto3.client('cognito-idp')
+              response_data = client.admin_create_user(
+                UserPoolId=user_pool_id,
+                Username=username,
+                TemporaryPassword=password,
+                MessageAction='SUPPRESS'
+              )
+
+              # Datetime型のままなので文字列に変換する
+              response_data['User']['UserCreateDate'] = \
+                response_data['User']['UserCreateDate'].strftime('%c')
+              response_data['User']['UserLastModifiedDate'] = \
+                response_data['User']['UserLastModifiedDate'].strftime('%c')
+
+            except Exception as e:
+              print("error: " + str(e))
+              response_data = {'error': str(e)}
+              cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+              return
+
+            print(response_data)
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+      Runtime: python3.6
+  CognitoFunctionExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Join 
+        - ''
+        - - irl-
+          - !Ref SystemId
+          - '-CognitoFunctionExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+              - Effect: Allow
+                Action:
+                  - 'cognito-idp:*'
+                Resource: 'arn:aws:cognito-idp:*:*:userpool/*'
