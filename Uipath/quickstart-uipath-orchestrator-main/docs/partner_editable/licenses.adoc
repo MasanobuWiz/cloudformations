@@ -1,0 +1,7 @@
+// Include details about the license and how they can sign up. If no license is required, clarify that. 
+
+A license for UiPath is required. To sign up, contact https://www.uipath.com/company/contact-us[UiPath sales]. A free 60-day non-production https://www.uipath.com/developers/studio-download[trial license] is available. 
+
+During deployment, provide your UiPath Orchestrator and UiPath High-Availability add-on license keys on the  *Specify stack details* page. For more information, see link:#_launch_the_quick_start[Launch the Quick Start]. Or, manually enter the license keys after the stack is deployed. 
+
+The Quick Start uses only uses Microsoft Windows images and the Red Hat Enterprise Linux distribution, provided by AWS. An Amazon Machine Image (AMI) subscription is not required.
